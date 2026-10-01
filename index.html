@@ -118,7 +118,6 @@
         <button class="music-btn" onclick="toggleMusic()">🎵 Som de Fundo</button>
     </header>
 
-    <!-- Formulário de Lançamento -->
     <div class="card">
         <div class="input-group full">
             <label>Descrição do Gasto</label>
@@ -147,7 +146,6 @@
         <button class="primary" onclick="addExpense()">Registrar Lançamento</button>
     </div>
 
-    <!-- Área de Histórico -->
     <div class="card">
         <div class="filter-container">
             <h2 style="font-size: 1.1rem; font-weight: 600;">Histórico de Gastos</h2>
@@ -312,7 +310,7 @@
         myChart.update();
     }
 
-    // PDF CORRIGIDO
+    // PDF 100% CORRIGIDO
     function generatePDF() {
         const selectedPeriod = document.getElementById('monthFilter').value;
         const periodText = selectedPeriod === 'ALL' ? 'Geral' : selectedPeriod.replace('/', '_');
@@ -324,13 +322,11 @@
         let total = 0;
         let catTotals = {};
         
-        // Geramos as transações em elementos DIV separadas para o PDF conseguir quebrar a página corretamente
         let transacoesHtml = "";
         filteredExpenses.forEach(e => {
             total += e.val;
             catTotals[e.cat] = (catTotals[e.cat] || 0) + e.val;
             
-            // O estilo 'page-break-inside: avoid;' impede que uma transação seja cortada no meio (metade numa página, metade na outra)
             transacoesHtml += `
                 <div style="margin-bottom: 12px; page-break-inside: avoid;">
                     <div style="display: flex; justify-content: space-between; font-weight: bold;">
@@ -354,9 +350,8 @@
             `;
         });
 
-        // Novo layout sem a tag <pre> que estava causando o bug de cortar texto
         const receiptHtml = `
-            <div style="font-family: 'Courier New', Courier, monospace; color: #000; background: #fff; padding: 30px; font-size: 14px; max-width: 800px; margin: 0 auto; line-height: 1.4;">
+            <div style="font-family: 'Courier New', Courier, monospace; color: #000; background: #fff; padding: 20px; font-size: 14px; width: 100%; max-width: 800px; line-height: 1.4; box-sizing: border-box;">
                 <h2 style="text-align: center; margin-bottom: 5px;">FINANCEBOT - TERMINAL</h2>
                 <p style="text-align: center; margin-top: 0; font-size: 12px;">Comprovante de Lançamentos</p>
                 <div style="border-bottom: 1px dashed #000; margin-bottom: 15px;"></div>
@@ -384,20 +379,24 @@
             </div>
         `;
 
-        const tempContainer = document.createElement('div');
-        tempContainer.innerHTML = receiptHtml;
-
-        // Configurações do PDF atualizadas para permitir a criação de múltiplas páginas
+        // OPÇÕES ATUALIZADAS COM SCROLLY: 0
         const opt = {
-            margin:       10, 
+            margin:       15, // Margem de 15mm para garantir que nada encoste na borda
             filename:     `Nota_Fiscal_Financeira_${periodText}.pdf`,
-            image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' }, 
+            image:        { type: 'jpeg', quality: 1 },
+            html2canvas:  { 
+                scale: 2, 
+                useCORS: true, 
+                backgroundColor: '#ffffff',
+                scrollY: 0, // <--- CORRIGE O BUG DE CORTAR O TOPO
+                windowWidth: 800 // Força o canvas a ter espaço horizontal suficiente
+            }, 
             jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak:    { mode: ['css', 'legacy'] } // <- Essa linha faz a mágica de criar páginas novas
+            pagebreak:    { mode: ['css', 'legacy'] }
         };
 
-        html2pdf().set(opt).from(tempContainer).save();
+        // Passando a string (receiptHtml) diretamente, o html2pdf lida melhor com a renderização oculta
+        html2pdf().set(opt).from(receiptHtml).save();
     }
 
     initChart();
