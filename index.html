@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Bot Financeiro Minimalista</title>
+    
+    <!-- Bibliotecas: Gráficos e PDF -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #0f1115; /* Escuro profundo para conforto ocular */
+            --surface-color: #1a1d24;
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --accent: #38bdf8;
+            --danger: #f43f5e;
+            --success: #10b981;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            padding: 20px;
+            padding-bottom: 80px; /* Espaço para scroll no iPhone */
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container { max-width: 600px; margin: 0 auto; }
+
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        h1 { font-size: 1.5rem; font-weight: 600; }
+        
+        .music-btn {
+            background: var(--surface-color); border: 1px solid #2d3340; color: var(--text-primary);
+            padding: 8px 12px; border-radius: 20px; cursor: pointer; font-size: 0.9rem;
+        }
+
+        .card {
+            background: var(--surface-color); border-radius: 16px; padding: 20px; margin-bottom: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+        }
+
+        .input-group { display: flex; flex-direction: column; margin-bottom: 12px; }
+        label { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px; }
+        input, select {
+            background: var(--bg-color); border: 1px solid #2d3340; color: var(--text-primary);
+            padding: 12px; border-radius: 8px; font-size: 1rem; outline: none;
+            -webkit-appearance: none;
+        }
+        input:focus, select:focus { border-color: var(--accent); }
+
+        button.primary {
+            background: var(--accent); color: #000; font-weight: 600; border: none;
+            padding: 14px; border-radius: 8px; width: 100%; font-size: 1rem; cursor: pointer;
+            margin-top: 8px;
+        }
+
+        .chart-container { position: relative; height: 250px; width: 100%; margin-bottom: 20px; }
+
+        .transaction-list { list-style: none; margin-top: 20px; }
+        .transaction-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 0; border-bottom: 1px solid #2d3340;
+        }
+        .transaction-item:last-child { border-bottom: none; }
+        .t-info h4 { font-size: 1rem; margin-bottom: 2px; }
+        .t-info p { font-size: 0.8rem; color: var(--text-secondary); }
+        .t-amount { font-weight: 600; color: var(--danger); }
+
+        .pdf-btn {
+            background: transparent; border: 1px solid var(--accent); color: var(--accent);
+            padding: 12px; border-radius: 8px; width: 100%; font-size: 1rem; cursor: pointer; margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>FinanceBot</h1>
+        <!-- Áudio de fundo relaxante em loop -->
+        <audio id="bgMusic" loop>
+            <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-16.mp3" type="audio/mpeg">
+        </audio>
+        <button class="music-btn" onclick="toggleMusic()">🎵 Play/Pause</button>
+    </header>
+
+    <!-- Formulário de Entrada -->
+    <div class="card data-exclude-pdf">
+        <div class="input-group">
+            <label>Descrição</label>
+            <input type="text" id="desc" placeholder="Ex: Conta de Luz, Tijolos, Tênis...">
+        </div>
+        <div class="input-group">
+            <label>Valor (R$)</label>
+            <input type="number" id="val" placeholder="0.00" step="0.01">
+        </div>
+        <div class="input-group">
+            <label>Categoria</label>
+            <select id="cat">
+                <option value="Contas">Contas Fixas/Mensais</option>
+                <option value="Cartão de Crédito">Cartão de Crédito</option>
+                <option value="Obras e Reformas">Obras e Reformas de Casa</option>
+                <option value="Gastos Pessoais">Gastos Pessoais</option>
+                <option value="Gastos Emergenciais">Gastos Emergenciais</option>
+            </select>
+        </div>
+        <button class="primary" onclick="addExpense()">Adicionar Gasto</button>
+    </div>
+
+    <!-- Área do Relatório (Será salva em PDF) -->
+    <div id="relatorio-pdf">
+        <div class="card">
+            <h2 style="font-size: 1.2rem; margin-bottom: 16px;">Distribuição de Gastos</h2>
+            <div class="chart-container">
+                <canvas id="expenseChart"></canvas>
+            </div>
+            
+            <h2 style="font-size: 1.2rem; margin-top: 24px; margin-bottom: 12px;">Histórico Detalhado</h2>
+            <ul class="transaction-list" id="t-list">
+                <!-- Itens injetados via JS -->
+            </ul>
+            <h3 style="margin-top: 16px; text-align: right; color: var(--text-primary);" id="total-view">Total: R$ 0,00</h3>
+        </div>
+    </div>
+
+    <button class="pdf-btn data-exclude-pdf" onclick="generatePDF()">📄 Salvar Relatório em PDF</button>
+</div>
+
+<script>
+    let expenses = JSON.parse(localStorage.getItem('financeBotExpenses')) || [];
+    let myChart = null;
+    const colors = ['#38bdf8', '#f43f5e', '#f59e0b', '#10b981', '#a855f7'];
+
+    // Música de fundo
+    const music = document.getElementById('bgMusic');
+    music.volume = 0.3;
+    function toggleMusic() {
+        music.paused ? music.play() : music.pause();
+    }
+
+    // Inicializar Gráfico
+    function initChart() {
+        const ctx = document.getElementById('expenseChart').getContext('2d');
+        myChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: { labels: [], datasets: [{ data: [], backgroundColor: colors, borderWidth: 0 }] },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: '#e2e8f0', font: { size: 11 } } }
+                }
+            }
+        });
+    }
+
+    // Adicionar Gasto
+    function addExpense() {
+        const desc = document.getElementById('desc').value;
+        const val = parseFloat(document.getElementById('val').value);
+        const cat = document.getElementById('cat').value;
+
+        if(!desc || isNaN(val)) { alert("Preencha descrição e valor."); return; }
+
+        expenses.push({ id: Date.now(), desc, val, cat, date: new Date().toLocaleDateString('pt-BR') });
+        localStorage.setItem('financeBotExpenses', JSON.stringify(expenses));
+        
+        document.getElementById('desc').value = '';
+        document.getElementById('val').value = '';
+        updateUI();
+    }
+
+    // Atualizar Interface
+    function updateUI() {
+        const list = document.getElementById('t-list');
+        list.innerHTML = '';
+        
+        let total = 0;
+        let catTotals = {};
+
+        expenses.forEach(e => {
+            total += e.val;
+            catTotals[e.cat] = (catTotals[e.cat] || 0) + e.val;
+
+            list.innerHTML += `
+                <li class="transaction-item">
+                    <div class="t-info">
+                        <h4>${e.desc}</h4>
+                        <p>${e.cat} • ${e.date}</p>
+                    </div>
+                    <div class="t-amount">R$ ${e.val.toFixed(2)}</div>
+                </li>
+            `;
+        });
+
+        document.getElementById('total-view').innerText = `Total: R$ ${total.toFixed(2)}`;
+
+        // Atualizar Gráfico
+        myChart.data.labels = Object.keys(catTotals);
+        myChart.data.datasets[0].data = Object.values(catTotals);
+        myChart.update();
+    }
+
+    // Gerar PDF formatado
+    function generatePDF() {
+        const element = document.getElementById('relatorio-pdf');
+        
+        const opt = {
+            margin:       10,
+            filename:     'Relatorio_Financeiro.pdf',
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#0f1115' },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        html2pdf().set(opt).from(element).save();
+    }
+
+    // Inicialização
+    initChart();
+    updateUI();
+</script>
+</body>
+</html>
