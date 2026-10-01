@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>FinanceBot Pro - Gestão Financeira Minimalista</title>
+    <title>Count - Gestão Financeira Minimalista</title>
     
-    <!-- Bibliotecas de gráficos e conversão para imagem -->
+    <!-- Bibliotecas de gráficos e Html2Canvas (para gerar imagem) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
@@ -233,7 +233,7 @@
 
         .export-btn {
             background: transparent;
-            border: 1.5px dashed var(--accent);
+            border: 1.5px solid var(--accent);
             color: var(--accent);
             padding: 14px;
             border-radius: var(--radius-md);
@@ -262,8 +262,8 @@
 <div class="container">
     <header>
         <div class="brand">
-            <div class="brand-icon">💼</div>
-            <h1>FinanceBot</h1>
+            <div class="brand-icon">🧾</div>
+            <h1>Count</h1>
         </div>
         <audio id="bgMusic" loop preload="none">
             <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-16.mp3" type="audio/mpeg">
@@ -342,12 +342,13 @@
     </div>
 
     <button class="export-btn" id="exportBtn" onclick="generateReceiptImage()">
-        <span>🧾</span> Baixar Cupom / Nota Fiscal
+        <span>🧾</span> Baixar Comprovante (Imagem)
     </button>
 </div>
 
 <script>
-    let expenses = JSON.parse(localStorage.getItem('financeBotExpenses')) || [];
+    // Usa 'countExpenses' mas puxa do financeBotExpenses caso exista histórico antigo do usuário
+    let expenses = JSON.parse(localStorage.getItem('countExpenses')) || JSON.parse(localStorage.getItem('financeBotExpenses')) || [];
     let myChart = null;
 
     const categoryMeta = {
@@ -438,7 +439,7 @@
         };
 
         expenses.unshift(item);
-        localStorage.setItem('financeBotExpenses', JSON.stringify(expenses));
+        localStorage.setItem('countExpenses', JSON.stringify(expenses));
         
         descInput.value = '';
         valInput.value = '';
@@ -449,7 +450,7 @@
 
     function deleteExpense(id) {
         expenses = expenses.filter(e => e.id !== id);
-        localStorage.setItem('financeBotExpenses', JSON.stringify(expenses));
+        localStorage.setItem('countExpenses', JSON.stringify(expenses));
         updateFilterOptions();
         updateUI();
     }
@@ -539,14 +540,14 @@
         myChart.update();
     }
 
-    // Geração de Imagem Estilo "Nota Fiscal Térmica"
+    // NOVA FUNÇÃO: Gera Imagem com estilo de Nota Fiscal
     function generateReceiptImage() {
         const btn = document.getElementById('exportBtn');
         btn.disabled = true;
-        btn.innerHTML = '<span>⏳</span> Gerando Cupom...';
+        btn.innerHTML = '<span>⏳</span> Processando Imagem...';
 
         const selectedPeriod = document.getElementById('monthFilter').value;
-        const periodText = selectedPeriod === 'ALL' ? 'Geral' : selectedPeriod;
+        const periodText = selectedPeriod === 'ALL' ? 'Todos os Meses' : selectedPeriod;
 
         const filteredExpenses = selectedPeriod === 'ALL' 
             ? expenses 
@@ -555,109 +556,115 @@
         let total = 0;
         let catTotals = {};
 
-        let itemsHtml = '';
+        let rowsHtml = '';
         filteredExpenses.forEach(e => {
             total += e.val;
             catTotals[e.cat] = (catTotals[e.cat] || 0) + e.val;
             
-            // Limitar texto para caber bem na nota
-            let descLimit = e.desc.length > 16 ? e.desc.substring(0, 16) + '..' : e.desc;
-            
-            itemsHtml += `
-                <div style="display: flex; justify-content: space-between; margin-bottom: 4px; align-items: flex-start;">
-                    <div style="width: 60%; word-wrap: break-word;">
-                        <span style="display:block;">${descLimit}</span>
-                        <span style="font-size: 10px; color: #555;">${e.date}</span>
-                    </div>
-                    <span style="width: 40%; text-align: right;">${formatCurrency(e.val)}</span>
-                </div>
+            rowsHtml += `
+                <tr>
+                    <td style="padding: 4px 0; vertical-align: top;">${e.date.substring(0,5)}</td>
+                    <td style="padding: 4px 5px; vertical-align: top; word-break: break-word;">${e.desc}</td>
+                    <td style="padding: 4px 0; text-align: right; vertical-align: top;">${formatCurrency(e.val)}</td>
+                </tr>
             `;
         });
 
-        let catHtml = '';
+        let catSummaryHtml = '';
         Object.keys(catTotals).forEach(cat => {
-            catHtml += `
-                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
+            catSummaryHtml += `
+                <div style="display: flex; justify-content: space-between; font-size: 13px; padding: 2px 0;">
                     <span>${cat}</span>
                     <span>${formatCurrency(catTotals[cat])}</span>
                 </div>
             `;
         });
 
-        const currentDateTime = new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR');
-
-        // Construir o HTML da Nota Fiscal
+        // HTML do Cupom Fiscal (estilo térmico monoespaçado)
         const receiptHtml = `
-            <div id="receipt-capture" style="width: 320px; background-color: #fdfbf7; color: #111; font-family: 'Courier New', Courier, monospace; padding: 20px; box-sizing: border-box; font-size: 12px; line-height: 1.4; border: 1px solid #ddd;">
-                <div style="text-align: center; margin-bottom: 12px;">
-                    <h2 style="margin: 0; font-size: 18px; font-weight: bold;">FINANCEBOT PRO</h2>
-                    <p style="margin: 0; font-size: 11px;">CUPOM NÃO FISCAL</p>
-                    <p style="margin: 5px 0 0 0; font-size: 11px;">Emissão: ${currentDateTime}</p>
-                    <p style="margin: 0; font-size: 11px;">Período Ref: ${periodText}</p>
+            <div id="receipt-container" style="
+                font-family: 'Courier New', Courier, monospace; 
+                color: #000; 
+                padding: 24px; 
+                background-color: #fff; 
+                width: 320px; 
+                box-sizing: border-box; 
+                border: 1px solid #eee;
+            ">
+                <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 12px; margin-bottom: 12px;">
+                    <h2 style="margin: 0; font-size: 26px; font-weight: bold; letter-spacing: 2px;">COUNT</h2>
+                    <p style="margin: 6px 0 0; font-size: 13px; font-weight: bold;">EXTRATO DE DESPESAS</p>
+                    <p style="margin: 6px 0 0; font-size: 12px;">Emissão: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                    <p style="margin: 4px 0 0; font-size: 12px;">Período: ${periodText}</p>
                 </div>
-                
-                <div style="border-top: 1px dashed #333; margin: 10px 0;"></div>
-                
-                <div style="display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 8px;">
-                    <span style="width: 60%;">DESCRIÇÃO</span>
-                    <span style="width: 40%; text-align: right;">VALOR</span>
+
+                <div style="margin-bottom: 16px;">
+                    <h3 style="font-size: 13px; margin: 0 0 6px 0; border-bottom: 1px dashed #000; padding-bottom: 4px; text-align: center;">RESUMO POR CATEGORIA</h3>
+                    ${catSummaryHtml || '<p style="font-size: 12px; text-align:center;">Nenhum registro.</p>'}
                 </div>
-                
-                <div style="border-top: 1px dashed #333; margin: 10px 0;"></div>
-                
-                ${itemsHtml || '<div style="text-align: center; padding: 10px 0;">Nenhum registro.</div>'}
-                
-                <div style="border-top: 1px dashed #333; margin: 10px 0;"></div>
-                
-                <div style="margin-bottom: 10px;">
-                    <p style="font-weight: bold; margin: 0 0 4px 0; font-size: 11px;">RESUMO POR CATEGORIA:</p>
-                    ${catHtml}
+
+                <div style="margin-bottom: 16px;">
+                    <h3 style="font-size: 13px; margin: 0 0 6px 0; border-bottom: 1px dashed #000; padding-bottom: 4px; text-align: center;">DETALHES DOS GASTOS</h3>
+                    <table style="width: 100%; font-size: 12px; text-align: left; border-collapse: collapse;">
+                        <thead>
+                            <tr style="border-bottom: 1px dashed #000;">
+                                <th style="padding: 4px 0; font-weight: normal;">Data</th>
+                                <th style="padding: 4px 5px; font-weight: normal;">Desc</th>
+                                <th style="padding: 4px 0; text-align: right; font-weight: normal;">Valor</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rowsHtml || '<tr><td colspan="3" style="text-align: center; padding: 10px 0;">Vazio</td></tr>'}
+                        </tbody>
+                    </table>
                 </div>
-                
-                <div style="border-top: 1px dashed #333; margin: 10px 0;"></div>
-                
-                <div style="display: flex; justify-content: space-between; font-size: 15px; font-weight: bold; margin: 15px 0;">
-                    <span>TOTAL</span>
-                    <span>${formatCurrency(total)}</span>
+
+                <div style="text-align: right; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 10px 0; margin-bottom: 16px; font-size: 16px; font-weight: bold;">
+                    TOTAL: ${formatCurrency(total)}
                 </div>
-                
-                <div style="text-align: center; font-size: 10px; margin-top: 20px;">
-                    <p style="margin: 0;">Obrigado por usar o FinanceBot</p>
-                    <p style="margin: 0;">Gestão Financeira Simplificada</p>
+
+                <div style="text-align: center; font-size: 11px;">
+                    <p style="margin: 0;">*** OBRIGADO POR USAR O COUNT ***</p>
+                    <p style="margin: 4px 0 0;">CONTROLE SEU DINHEIRO</p>
                 </div>
             </div>
         `;
 
-        // Criar um container oculto na tela para o html2canvas conseguir ler
-        const tempContainer = document.createElement('div');
-        tempContainer.style.position = 'absolute';
-        tempContainer.style.left = '-9999px';
-        tempContainer.style.top = '0';
-        tempContainer.innerHTML = receiptHtml;
-        document.body.appendChild(tempContainer);
+        // Criar um container temporário escondido na tela para o html2canvas renderizar
+        const wrapper = document.createElement('div');
+        wrapper.style.position = 'absolute';
+        wrapper.style.left = '-9999px';
+        wrapper.style.top = '0';
+        wrapper.innerHTML = receiptHtml;
+        document.body.appendChild(wrapper);
 
-        const captureElement = document.getElementById('receipt-capture');
+        const receiptElement = wrapper.querySelector('#receipt-container');
 
-        // Usar html2canvas para tirar o print
-        html2canvas(captureElement, { 
-            scale: 2, // Maior qualidade da imagem
-            backgroundColor: '#fdfbf7' 
+        // Renderizar a imagem
+        html2canvas(receiptElement, { 
+            scale: 2, 
+            useCORS: true, 
+            backgroundColor: "#ffffff" 
         }).then(canvas => {
-            // Gerar link de download
+            // Converter canvas em imagem PNG
+            const imgData = canvas.toDataURL('image/png');
+            
+            // Criar link para download automático
             const link = document.createElement('a');
-            link.download = `Cupom_FinanceBot_${periodText.replace('/', '_')}.png`;
-            link.href = canvas.toDataURL('image/png');
+            link.href = imgData;
+            link.download = `Comprovante_Count_${periodText.replace('/', '_')}.png`;
             link.click();
-
-            // Limpar a tela e restaurar botão
-            document.body.removeChild(tempContainer);
+            
+            // Limpeza
+            document.body.removeChild(wrapper);
             btn.disabled = false;
-            btn.innerHTML = '<span>🧾</span> Baixar Cupom / Nota Fiscal';
+            btn.innerHTML = '<span>🧾</span> Baixar Comprovante (Imagem)';
         }).catch(err => {
             console.error('Erro ao gerar imagem:', err);
-            alert('Erro ao gerar o cupom. Tente novamente.');
+            alert('Ocorreu um erro ao gerar a imagem. Tente novamente.');
+            document.body.removeChild(wrapper);
             btn.disabled = false;
-            btn.innerHTML = '<span>🧾</span> Baixar Cupom / Nota Fiscal';
+            btn.innerHTML = '<span>🧾</span> Baixar Comprovante (Imagem)';
         });
     }
 
