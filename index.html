@@ -312,7 +312,7 @@
         myChart.update();
     }
 
-    // NOVA FUNÇÃO: Gera um texto puro de nota fiscal por baixo dos panos e imprime no PDF
+    // PDF CORRIGIDO
     function generatePDF() {
         const selectedPeriod = document.getElementById('monthFilter').value;
         const periodText = selectedPeriod === 'ALL' ? 'Geral' : selectedPeriod.replace('/', '_');
@@ -324,23 +324,37 @@
         let total = 0;
         let catTotals = {};
         
-        // Formatação de listas de texto puro
-        let transacoesTexto = "";
+        // Geramos as transações em elementos DIV separadas para o PDF conseguir quebrar a página corretamente
+        let transacoesHtml = "";
         filteredExpenses.forEach(e => {
             total += e.val;
             catTotals[e.cat] = (catTotals[e.cat] || 0) + e.val;
             
-            // Cria um layout de terminal alinhado
-            transacoesTexto += `${e.date} | ${e.desc}\n`;
-            transacoesTexto += `  -> ${e.cat} ................. R$ ${e.val.toFixed(2).replace('.', ',')}\n\n`;
+            // O estilo 'page-break-inside: avoid;' impede que uma transação seja cortada no meio (metade numa página, metade na outra)
+            transacoesHtml += `
+                <div style="margin-bottom: 12px; page-break-inside: avoid;">
+                    <div style="display: flex; justify-content: space-between; font-weight: bold;">
+                        <span>${e.date} | ${e.desc}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 13px; color: #333; margin-top: 4px;">
+                        <span>&rarr; ${e.cat}</span>
+                        <span>R$ ${e.val.toFixed(2).replace('.', ',')}</span>
+                    </div>
+                </div>
+            `;
         });
 
-        let resumoTexto = "";
+        let resumoHtml = "";
         Object.keys(catTotals).forEach(cat => {
-            resumoTexto += `${cat.padEnd(25, '.')} R$ ${catTotals[cat].toFixed(2).replace('.', ',')}\n`;
+            resumoHtml += `
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
+                    <span>${cat}</span>
+                    <span>R$ ${catTotals[cat].toFixed(2).replace('.', ',')}</span>
+                </div>
+            `;
         });
 
-        // Cria o HTML invisível da "Nota Fiscal" usando fonte de terminal (monospace)
+        // Novo layout sem a tag <pre> que estava causando o bug de cortar texto
         const receiptHtml = `
             <div style="font-family: 'Courier New', Courier, monospace; color: #000; background: #fff; padding: 30px; font-size: 14px; max-width: 800px; margin: 0 auto; line-height: 1.4;">
                 <h2 style="text-align: center; margin-bottom: 5px;">FINANCEBOT - TERMINAL</h2>
@@ -352,35 +366,37 @@
                 
                 <div style="border-bottom: 1px dashed #000; margin: 15px 0;"></div>
                 <h3 style="margin-bottom: 10px; font-size: 15px;">RESUMO POR CATEGORIA</h3>
-                <pre style="font-family: inherit; margin: 0; font-size: 13px; white-space: pre-wrap;">${resumoTexto || 'Sem lançamentos registrados.\n'}</pre>
+                <div>
+                    ${resumoHtml || 'Sem lançamentos registrados.'}
+                </div>
                 
                 <div style="border-bottom: 1px dashed #000; margin: 15px 0;"></div>
-                <h3 style="margin-bottom: 10px; font-size: 15px;">HISTÓRICO DE GASTOS</h3>
-                <pre style="font-family: inherit; margin: 0; font-size: 13px; white-space: pre-wrap;">${transacoesTexto || 'Nenhum lançamento no período.\n'}</pre>
+                <h3 style="margin-bottom: 15px; font-size: 15px;">HISTÓRICO DE GASTOS</h3>
+                <div>
+                    ${transacoesHtml || 'Nenhum lançamento no período.'}
+                </div>
                 
-                <div style="border-bottom: 2px solid #000; margin: 15px 0;"></div>
-                <h2 style="text-align: right; margin: 0;">TOTAL: R$ ${total.toFixed(2).replace('.', ',')}</h2>
+                <div style="border-bottom: 2px solid #000; margin: 20px 0 15px 0;"></div>
+                <h2 style="text-align: right; margin: 0; font-size: 20px;">TOTAL: R$ ${total.toFixed(2).replace('.', ',')}</h2>
                 <div style="border-bottom: 2px solid #000; margin-top: 15px;"></div>
                 
-                <p style="text-align: center; font-size: 11px; margin-top: 30px;">-- Relatório gerado automaticamente --</p>
+                <p style="text-align: center; font-size: 11px; margin-top: 30px; color: #666;">-- Relatório gerado automaticamente --</p>
             </div>
         `;
 
-        // Cria um elemento temporário na memória (não aparece na tela)
         const tempContainer = document.createElement('div');
         tempContainer.innerHTML = receiptHtml;
 
-        // Configurações do PDF
+        // Configurações do PDF atualizadas para permitir a criação de múltiplas páginas
         const opt = {
-            margin:       [10, 10, 10, 10], 
+            margin:       10, 
             filename:     `Nota_Fiscal_Financeira_${periodText}.pdf`,
-            image:        { type: 'jpeg', quality: 1 },
-            html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' }, // Força fundo branco absoluto
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' }, 
             jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak:    { mode: 'avoid-all' }
+            pagebreak:    { mode: ['css', 'legacy'] } // <- Essa linha faz a mágica de criar páginas novas
         };
 
-        // Passa o texto invisível diretamente pro PDF
         html2pdf().set(opt).from(tempContainer).save();
     }
 
