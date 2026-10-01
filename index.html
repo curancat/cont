@@ -76,17 +76,6 @@
 
         .chart-container { position: relative; height: 230px; width: 100%; margin: 10px 0 20px 0; }
 
-        /* Lista de texto que aparece apenas no PDF */
-        #text-summary-view { display: none; margin: 10px 0 20px 0; }
-        .text-summary-list { list-style: none; }
-        .text-summary-item {
-            display: flex; justify-content: space-between; 
-            padding: 8px 0; border-bottom: 1px dashed var(--surface-border);
-            font-size: 0.9rem;
-        }
-        .text-summary-item span:first-child { font-weight: 600; color: var(--text-primary); }
-        .text-summary-item span:last-child { color: var(--text-secondary); }
-
         .transaction-list { list-style: none; margin-top: 10px; }
         .transaction-item {
             display: flex; justify-content: space-between; align-items: center;
@@ -158,50 +147,36 @@
         <button class="primary" onclick="addExpense()">Registrar Lançamento</button>
     </div>
 
-    <!-- Área de Histórico e Relatório -->
-    <div id="relatorio-pdf">
-        <div class="card">
-            <div class="filter-container">
-                <h2 style="font-size: 1.1rem; font-weight: 600;">Histórico de Gastos</h2>
-                <!-- O select some no PDF, substituído pelo texto -->
-                <select id="monthFilter" onchange="updateUI()">
-                    <option value="ALL">Todos os Meses</option>
-                </select>
-            </div>
+    <!-- Área de Histórico -->
+    <div class="card">
+        <div class="filter-container">
+            <h2 style="font-size: 1.1rem; font-weight: 600;">Histórico de Gastos</h2>
+            <select id="monthFilter" onchange="updateUI()">
+                <option value="ALL">Todos os Meses</option>
+            </select>
+        </div>
 
-            <!-- Gráfico de Pizza (Visível na Tela) -->
-            <div class="chart-container" id="chart-view">
-                <canvas id="expenseChart"></canvas>
-            </div>
+        <div class="chart-container" id="chart-view">
+            <canvas id="expenseChart"></canvas>
+        </div>
+        
+        <ul class="transaction-list" id="t-list">
+            <!-- Injetado via JS -->
+        </ul>
 
-            <!-- Resumo em Texto (Visível apenas no PDF) -->
-            <div id="text-summary-view">
-                <h3 style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 8px;">Resumo por Categoria</h3>
-                <ul class="text-summary-list" id="text-summary-list">
-                    <!-- Injetado via JS -->
-                </ul>
-            </div>
-            
-            <h3 style="font-size: 0.95rem; color: var(--text-secondary); margin-top: 20px; margin-bottom: 8px;">Lançamentos no Período</h3>
-            <ul class="transaction-list" id="t-list">
-                <!-- Injetado via JS -->
-            </ul>
-
-            <div class="summary-total">
-                <span>Total de Gastos:</span>
-                <h3 id="total-view">R$ 0,00</h3>
-            </div>
+        <div class="summary-total">
+            <span>Total de Gastos:</span>
+            <h3 id="total-view">R$ 0,00</h3>
         </div>
     </div>
 
-    <button class="pdf-btn" onclick="generatePDF()">📄 Exportar Relatório do Período em PDF</button>
+    <button class="pdf-btn" onclick="generatePDF()">📄 Emitir Nota Fiscal (PDF)</button>
 </div>
 
 <script>
     let expenses = JSON.parse(localStorage.getItem('financeBotExpenses')) || [];
     let myChart = null;
     
-    // Mapeamento fixo de cores para o gráfico de pizza
     const categoryColors = {
         'Contas Fixas': '#38bdf8',
         'Cartão de Crédito': '#f43f5e',
@@ -210,17 +185,14 @@
         'Gastos Emergenciais': '#a855f7'
     };
 
-    // Define data padrão como hoje
     document.getElementById('date').value = new Date().toISOString().split('T')[0];
 
-    // Áudio
     const music = document.getElementById('bgMusic');
     music.volume = 0.25;
     function toggleMusic() {
         music.paused ? music.play() : music.pause();
     }
 
-    // Inicializar Gráfico Chart.js
     function initChart() {
         const ctx = document.getElementById('expenseChart').getContext('2d');
         myChart = new Chart(ctx, {
@@ -236,7 +208,6 @@
         });
     }
 
-    // Adicionar Lançamento
     function addExpense() {
         const desc = document.getElementById('desc').value.trim();
         const val = parseFloat(document.getElementById('val').value);
@@ -262,10 +233,9 @@
             period: periodKey
         };
 
-        expenses.unshift(item); // Adiciona no início da lista
+        expenses.unshift(item);
         localStorage.setItem('financeBotExpenses', JSON.stringify(expenses));
         
-        // Limpa campos
         document.getElementById('desc').value = '';
         document.getElementById('val').value = '';
 
@@ -273,7 +243,6 @@
         updateUI();
     }
 
-    // Excluir Lançamento
     function deleteExpense(id) {
         expenses = expenses.filter(e => e.id !== id);
         localStorage.setItem('financeBotExpenses', JSON.stringify(expenses));
@@ -281,7 +250,6 @@
         updateUI();
     }
 
-    // Atualizar Filtros de Mês no Select
     function updateFilterOptions() {
         const select = document.getElementById('monthFilter');
         const currentSelection = select.value;
@@ -298,26 +266,20 @@
         }
     }
 
-    // Atualizar Interface
     function updateUI() {
         const list = document.getElementById('t-list');
-        const textSummaryList = document.getElementById('text-summary-list');
         const selectedPeriod = document.getElementById('monthFilter').value;
         
         list.innerHTML = '';
-        textSummaryList.innerHTML = '';
-
         let total = 0;
         let catTotals = {};
 
-        // Filtrar lançamentos pelo período escolhido
         const filteredExpenses = selectedPeriod === 'ALL' 
             ? expenses 
             : expenses.filter(e => e.period === selectedPeriod);
 
         if (filteredExpenses.length === 0) {
             list.innerHTML = '<li style="color: var(--text-secondary); font-size: 0.85rem; text-align: center; padding: 20px 0;">Nenhum gasto registrado neste período.</li>';
-            textSummaryList.innerHTML = '<li style="color: var(--text-secondary); font-size: 0.85rem;">Sem dados.</li>';
         } else {
             filteredExpenses.forEach(e => {
                 total += e.val;
@@ -336,24 +298,10 @@
                     </li>
                 `;
             });
-
-            // Preencher resumo em texto simples para o PDF
-            Object.keys(catTotals).forEach(cat => {
-                const catVal = catTotals[cat];
-                const percentage = total > 0 ? ((catVal / total) * 100).toFixed(1) : 0;
-
-                textSummaryList.innerHTML += `
-                    <li class="text-summary-item">
-                        <span>${cat}</span>
-                        <span>R$ ${catVal.toFixed(2).replace('.', ',')} (${percentage}%)</span>
-                    </li>
-                `;
-            });
         }
 
         document.getElementById('total-view').innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
 
-        // Atualizar Gráfico Chart.js
         const categories = Object.keys(catTotals);
         const values = Object.values(catTotals);
         const chartColors = categories.map(cat => categoryColors[cat] || '#38bdf8');
@@ -364,55 +312,78 @@
         myChart.update();
     }
 
-    // Exportar PDF 100% Texto Limpo
+    // NOVA FUNÇÃO: Gera um texto puro de nota fiscal por baixo dos panos e imprime no PDF
     function generatePDF() {
-        const element = document.getElementById('relatorio-pdf');
-        const selectBox = document.getElementById('monthFilter');
-        const filterContainer = document.querySelector('.filter-container');
-        const selectedPeriod = selectBox.value;
+        const selectedPeriod = document.getElementById('monthFilter').value;
         const periodText = selectedPeriod === 'ALL' ? 'Geral' : selectedPeriod.replace('/', '_');
 
-        const chartView = document.getElementById('chart-view');
-        const textSummaryView = document.getElementById('text-summary-view');
-        const deleteButtons = document.querySelectorAll('.btn-delete');
+        const filteredExpenses = selectedPeriod === 'ALL' 
+            ? expenses 
+            : expenses.filter(e => e.period === selectedPeriod);
 
-        // Cria texto simples para substituir a caixa de seleção <select> no PDF
-        const filterText = document.createElement('span');
-        filterText.id = 'pdf-filter-text';
-        filterText.style.color = 'var(--text-secondary)';
-        filterText.style.fontSize = '0.9rem';
-        filterText.innerText = selectBox.options[selectBox.selectedIndex].text;
+        let total = 0;
+        let catTotals = {};
         
-        selectBox.style.display = 'none'; // Esconde a caixa seletora
-        filterContainer.appendChild(filterText); // Adiciona texto limpo
+        // Formatação de listas de texto puro
+        let transacoesTexto = "";
+        filteredExpenses.forEach(e => {
+            total += e.val;
+            catTotals[e.cat] = (catTotals[e.cat] || 0) + e.val;
+            
+            // Cria um layout de terminal alinhado
+            transacoesTexto += `${e.date} | ${e.desc}\n`;
+            transacoesTexto += `  -> ${e.cat} ................. R$ ${e.val.toFixed(2).replace('.', ',')}\n\n`;
+        });
 
-        // Esconde Gráfico e botões, mostra apenas texto puro
-        chartView.style.display = 'none';
-        textSummaryView.style.display = 'block';
-        deleteButtons.forEach(btn => btn.style.display = 'none');
+        let resumoTexto = "";
+        Object.keys(catTotals).forEach(cat => {
+            resumoTexto += `${cat.padEnd(25, '.')} R$ ${catTotals[cat].toFixed(2).replace('.', ',')}\n`;
+        });
 
-        // Configurações do PDF para evitar cortes
+        // Cria o HTML invisível da "Nota Fiscal" usando fonte de terminal (monospace)
+        const receiptHtml = `
+            <div style="font-family: 'Courier New', Courier, monospace; color: #000; background: #fff; padding: 30px; font-size: 14px; max-width: 800px; margin: 0 auto; line-height: 1.4;">
+                <h2 style="text-align: center; margin-bottom: 5px;">FINANCEBOT - TERMINAL</h2>
+                <p style="text-align: center; margin-top: 0; font-size: 12px;">Comprovante de Lançamentos</p>
+                <div style="border-bottom: 1px dashed #000; margin-bottom: 15px;"></div>
+                
+                <p><strong>Período:</strong> ${selectedPeriod === 'ALL' ? 'Todos os Meses' : selectedPeriod}</p>
+                <p><strong>Emissão:</strong> ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
+                
+                <div style="border-bottom: 1px dashed #000; margin: 15px 0;"></div>
+                <h3 style="margin-bottom: 10px; font-size: 15px;">RESUMO POR CATEGORIA</h3>
+                <pre style="font-family: inherit; margin: 0; font-size: 13px; white-space: pre-wrap;">${resumoTexto || 'Sem lançamentos registrados.\n'}</pre>
+                
+                <div style="border-bottom: 1px dashed #000; margin: 15px 0;"></div>
+                <h3 style="margin-bottom: 10px; font-size: 15px;">HISTÓRICO DE GASTOS</h3>
+                <pre style="font-family: inherit; margin: 0; font-size: 13px; white-space: pre-wrap;">${transacoesTexto || 'Nenhum lançamento no período.\n'}</pre>
+                
+                <div style="border-bottom: 2px solid #000; margin: 15px 0;"></div>
+                <h2 style="text-align: right; margin: 0;">TOTAL: R$ ${total.toFixed(2).replace('.', ',')}</h2>
+                <div style="border-bottom: 2px solid #000; margin-top: 15px;"></div>
+                
+                <p style="text-align: center; font-size: 11px; margin-top: 30px;">-- Relatório gerado automaticamente --</p>
+            </div>
+        `;
+
+        // Cria um elemento temporário na memória (não aparece na tela)
+        const tempContainer = document.createElement('div');
+        tempContainer.innerHTML = receiptHtml;
+
+        // Configurações do PDF
         const opt = {
-            margin:       [10, 10, 15, 10], // Margem superior, direita, inferior, esquerda
-            filename:     `Relatorio_Financeiro_${periodText}.pdf`,
-            image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#0f1115' },
+            margin:       [10, 10, 10, 10], 
+            filename:     `Nota_Fiscal_Financeira_${periodText}.pdf`,
+            image:        { type: 'jpeg', quality: 1 },
+            html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' }, // Força fundo branco absoluto
             jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] } // Evita cortes horizontais e verticais na tabela
+            pagebreak:    { mode: 'avoid-all' }
         };
 
-        html2pdf().set(opt).from(element).save().then(() => {
-            // Restaura tudo de volta ao estado normal da tela
-            chartView.style.display = 'block';
-            textSummaryView.style.display = 'none';
-            deleteButtons.forEach(btn => btn.style.display = 'block');
-            
-            filterText.remove();
-            selectBox.style.display = 'block';
-        });
+        // Passa o texto invisível diretamente pro PDF
+        html2pdf().set(opt).from(tempContainer).save();
     }
 
-    // Inicialização
     initChart();
     updateFilterOptions();
     updateUI();
