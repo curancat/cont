@@ -310,7 +310,7 @@
         myChart.update();
     }
 
-    // PDF 100% CORRIGIDO
+    // PDF 100% CORRIGIDO: Ancorado no documento para não perder margens
     function generatePDF() {
         const selectedPeriod = document.getElementById('monthFilter').value;
         const periodText = selectedPeriod === 'ALL' ? 'Geral' : selectedPeriod.replace('/', '_');
@@ -351,7 +351,7 @@
         });
 
         const receiptHtml = `
-            <div style="font-family: 'Courier New', Courier, monospace; color: #000; background: #fff; padding: 20px; font-size: 14px; width: 100%; max-width: 800px; line-height: 1.4; box-sizing: border-box;">
+            <div style="font-family: 'Courier New', Courier, monospace; color: #000; background: #fff; padding: 25px 35px; font-size: 14px; box-sizing: border-box;">
                 <h2 style="text-align: center; margin-bottom: 5px;">FINANCEBOT - TERMINAL</h2>
                 <p style="text-align: center; margin-top: 0; font-size: 12px;">Comprovante de Lançamentos</p>
                 <div style="border-bottom: 1px dashed #000; margin-bottom: 15px;"></div>
@@ -379,24 +379,36 @@
             </div>
         `;
 
-        // OPÇÕES ATUALIZADAS COM SCROLLY: 0
+        // 1. Cria um contentor físico temporário ancorado no ecrã superior esquerdo
+        const tempElement = document.createElement('div');
+        tempElement.innerHTML = receiptHtml;
+        tempElement.style.position = 'fixed'; // Fixado para não sofrer offset da rolagem
+        tempElement.style.top = '0';
+        tempElement.style.left = '0';
+        tempElement.style.width = '700px'; // Força a largura constante
+        tempElement.style.zIndex = '-9999'; // Esconde atrás dos outros elementos visuais
+        document.body.appendChild(tempElement);
+
         const opt = {
-            margin:       15, // Margem de 15mm para garantir que nada encoste na borda
+            margin:       10,
             filename:     `Nota_Fiscal_Financeira_${periodText}.pdf`,
             image:        { type: 'jpeg', quality: 1 },
             html2canvas:  { 
                 scale: 2, 
                 useCORS: true, 
                 backgroundColor: '#ffffff',
-                scrollY: 0, // <--- CORRIGE O BUG DE CORTAR O TOPO
-                windowWidth: 800 // Força o canvas a ter espaço horizontal suficiente
+                scrollY: 0,
+                scrollX: 0, // Garante que a leitura em X inicia no píxel zero estrito
+                windowWidth: 700 
             }, 
             jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
             pagebreak:    { mode: ['css', 'legacy'] }
         };
 
-        // Passando a string (receiptHtml) diretamente, o html2pdf lida melhor com a renderização oculta
-        html2pdf().set(opt).from(receiptHtml).save();
+        // 2. Extrai o PDF do contentor físico perfeitamente enquadrado e apaga-o em seguida
+        html2pdf().set(opt).from(tempElement).save().then(() => {
+            document.body.removeChild(tempElement);
+        });
     }
 
     initChart();
