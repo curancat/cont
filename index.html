@@ -7,7 +7,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>FinanceBot - Minimalista</title>
     
-    <!-- Biblioteca de Exportação em PDF -->
+    <!-- Bibliotecas: Gráficos e PDF -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <style>
@@ -73,9 +74,11 @@
         }
         .filter-container select { width: auto; min-width: 150px; padding: 8px 12px; font-size: 0.85rem; }
 
-        /* Estilos do Gráfico em Barras de Progresso */
-        .bars-container { margin: 16px 0 24px 0; }
-        .bar-item { margin-bottom: 12px; }
+        .chart-container { position: relative; height: 230px; width: 100%; margin: 10px 0 20px 0; }
+
+        /* Estilos das Barras para o PDF */
+        .bars-container { display: none; margin: 16px 0 24px 0; }
+        .bar-item { margin-bottom: 14px; }
         .bar-header { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 6px; }
         .bar-name { color: var(--text-primary); font-weight: 500; }
         .bar-val { color: var(--text-secondary); font-size: 0.8rem; }
@@ -83,7 +86,7 @@
             background: var(--bg-color); height: 10px; border-radius: 6px; overflow: hidden;
             border: 1px solid var(--surface-border);
         }
-        .bar-fill { height: 100%; border-radius: 6px; transition: width 0.4s ease; }
+        .bar-fill { height: 100%; border-radius: 6px; }
 
         .transaction-list { list-style: none; margin-top: 10px; }
         .transaction-item {
@@ -156,40 +159,46 @@
         <button class="primary" onclick="addExpense()">Registrar Lançamento</button>
     </div>
 
-    <!-- Área de Histórico e Relatório PDF -->
+    <!-- Área de Histórico e Relatório -->
     <div id="relatorio-pdf">
         <div class="card">
             <div class="filter-container">
-                <h2 style="font-size: 1.1rem; font-weight: 600;">Resumo por Categoria</h2>
+                <h2 style="font-size: 1.1rem; font-weight: 600;">Histórico & Gráfico</h2>
                 <select id="monthFilter" onchange="updateUI()">
                     <option value="ALL">Todos os Meses</option>
                 </select>
             </div>
 
-            <!-- Gráfico de Barras em Texto / CSS -->
-            <div class="bars-container" id="categoryBars">
+            <!-- Gráfico Visível na Tela -->
+            <div class="chart-container" id="chart-view">
+                <canvas id="expenseChart"></canvas>
+            </div>
+
+            <!-- Gráfico Visível apenas no PDF -->
+            <div class="bars-container" id="bars-view">
                 <!-- Injetado via JS -->
             </div>
             
-            <h3 style="font-size: 0.95rem; color: var(--text-secondary); margin-top: 20px; margin-bottom: 8px;">Lançamentos Detalhados</h3>
+            <h3 style="font-size: 0.95rem; color: var(--text-secondary); margin-top: 20px; margin-bottom: 8px;">Lançamentos no Período</h3>
             <ul class="transaction-list" id="t-list">
                 <!-- Injetado via JS -->
             </ul>
 
             <div class="summary-total">
-                <span>Total do Período:</span>
+                <span>Total de Gastos:</span>
                 <h3 id="total-view">R$ 0,00</h3>
             </div>
         </div>
     </div>
 
-    <button class="pdf-btn" onclick="generatePDF()">📄 Exportar Relatório em PDF</button>
+    <button class="pdf-btn" onclick="generatePDF()">📄 Exportar Relatório do Período em PDF</button>
 </div>
 
 <script>
     let expenses = JSON.parse(localStorage.getItem('financeBotExpenses')) || [];
+    let myChart = null;
     
-    // Mapeamento de cores por categoria
+    // Mapeamento fixo de cores por categoria
     const categoryColors = {
         'Contas Fixas': '#38bdf8',
         'Cartão de Crédito': '#f43f5e',
@@ -198,14 +207,30 @@
         'Gastos Emergenciais': '#a855f7'
     };
 
-    // Data padrão como hoje
+    // Define data padrão como hoje
     document.getElementById('date').value = new Date().toISOString().split('T')[0];
 
-    // Música de fundo
+    // Áudio
     const music = document.getElementById('bgMusic');
     music.volume = 0.25;
     function toggleMusic() {
         music.paused ? music.play() : music.pause();
+    }
+
+    // Inicializar Gráfico Chart.js
+    function initChart() {
+        const ctx = document.getElementById('expenseChart').getContext('2d');
+        myChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderWidth: 0 }] },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 11 } } }
+                }
+            }
+        });
     }
 
     // Adicionar Lançamento
@@ -234,9 +259,10 @@
             period: periodKey
         };
 
-        expenses.unshift(item);
+        expenses.unshift(item); // Adiciona no início da lista
         localStorage.setItem('financeBotExpenses', JSON.stringify(expenses));
         
+        // Limpa campos
         document.getElementById('desc').value = '';
         document.getElementById('val').value = '';
 
@@ -252,7 +278,7 @@
         updateUI();
     }
 
-    // Atualizar Filtros de Mês
+    // Atualizar Filtros de Mês no Select
     function updateFilterOptions() {
         const select = document.getElementById('monthFilter');
         const currentSelection = select.value;
@@ -269,27 +295,27 @@
         }
     }
 
-    // Atualizar Interface
+    // Atualizar Interface e Gráficos (Pizza e Barras)
     function updateUI() {
         const list = document.getElementById('t-list');
-        const barsContainer = document.getElementById('categoryBars');
+        const barsView = document.getElementById('bars-view');
         const selectedPeriod = document.getElementById('monthFilter').value;
         
         list.innerHTML = '';
-        barsContainer.innerHTML = '';
+        barsView.innerHTML = '';
 
         let total = 0;
         let catTotals = {};
 
+        // Filtrar lançamentos pelo período escolhido
         const filteredExpenses = selectedPeriod === 'ALL' 
             ? expenses 
             : expenses.filter(e => e.period === selectedPeriod);
 
         if (filteredExpenses.length === 0) {
             list.innerHTML = '<li style="color: var(--text-secondary); font-size: 0.85rem; text-align: center; padding: 20px 0;">Nenhum gasto registrado neste período.</li>';
-            barsContainer.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; text-align: center; padding: 10px 0;">Sem dados para exibir o gráfico.</div>';
+            barsView.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; text-align: center; padding: 10px 0;">Sem dados para exibir.</div>';
         } else {
-            // Calcular totais
             filteredExpenses.forEach(e => {
                 total += e.val;
                 catTotals[e.cat] = (catTotals[e.cat] || 0) + e.val;
@@ -308,13 +334,13 @@
                 `;
             });
 
-            // Renderizar barras de progresso
+            // Preencher as barras HTML/CSS para o PDF
             Object.keys(catTotals).forEach(cat => {
                 const catVal = catTotals[cat];
                 const percentage = total > 0 ? ((catVal / total) * 100).toFixed(1) : 0;
-                const barColor = categoryColors[cat] || 'var(--accent)';
+                const barColor = categoryColors[cat] || '#38bdf8';
 
-                barsContainer.innerHTML += `
+                barsView.innerHTML += `
                     <div class="bar-item">
                         <div class="bar-header">
                             <span class="bar-name">${cat}</span>
@@ -329,15 +355,32 @@
         }
 
         document.getElementById('total-view').innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
+
+        // Atualizar Gráfico Chart.js
+        const categories = Object.keys(catTotals);
+        const values = Object.values(catTotals);
+        const chartColors = categories.map(cat => categoryColors[cat] || '#38bdf8');
+
+        myChart.data.labels = categories;
+        myChart.data.datasets[0].data = values;
+        myChart.data.datasets[0].backgroundColor = chartColors;
+        myChart.update();
     }
 
-    // Exportar PDF em formato legível e limpo
+    // Exportar PDF
     function generatePDF() {
         const element = document.getElementById('relatorio-pdf');
         const selectedPeriod = document.getElementById('monthFilter').value;
         const periodText = selectedPeriod === 'ALL' ? 'Geral' : selectedPeriod.replace('/', '_');
 
+        // Seleciona os elementos para alternância
+        const chartView = document.getElementById('chart-view');
+        const barsView = document.getElementById('bars-view');
         const deleteButtons = document.querySelectorAll('.btn-delete');
+
+        // Prepara para o PDF: esconde Pizza, mostra Barras, esconde "X"
+        chartView.style.display = 'none';
+        barsView.style.display = 'block';
         deleteButtons.forEach(btn => btn.style.display = 'none');
 
         const opt = {
@@ -349,11 +392,15 @@
         };
 
         html2pdf().set(opt).from(element).save().then(() => {
+            // Restaura exibição original após salvar o PDF
+            chartView.style.display = 'block';
+            barsView.style.display = 'none';
             deleteButtons.forEach(btn => btn.style.display = 'block');
         });
     }
 
     // Inicialização
+    initChart();
     updateFilterOptions();
     updateUI();
 </script>
