@@ -76,17 +76,16 @@
 
         .chart-container { position: relative; height: 230px; width: 100%; margin: 10px 0 20px 0; }
 
-        /* Estilos das Barras para o PDF */
-        .bars-container { display: none; margin: 16px 0 24px 0; }
-        .bar-item { margin-bottom: 14px; }
-        .bar-header { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 6px; }
-        .bar-name { color: var(--text-primary); font-weight: 500; }
-        .bar-val { color: var(--text-secondary); font-size: 0.8rem; }
-        .bar-track {
-            background: var(--bg-color); height: 10px; border-radius: 6px; overflow: hidden;
-            border: 1px solid var(--surface-border);
+        /* Lista de texto que aparece apenas no PDF */
+        #text-summary-view { display: none; margin: 10px 0 20px 0; }
+        .text-summary-list { list-style: none; }
+        .text-summary-item {
+            display: flex; justify-content: space-between; 
+            padding: 8px 0; border-bottom: 1px dashed var(--surface-border);
+            font-size: 0.9rem;
         }
-        .bar-fill { height: 100%; border-radius: 6px; }
+        .text-summary-item span:first-child { font-weight: 600; color: var(--text-primary); }
+        .text-summary-item span:last-child { color: var(--text-secondary); }
 
         .transaction-list { list-style: none; margin-top: 10px; }
         .transaction-item {
@@ -163,20 +162,24 @@
     <div id="relatorio-pdf">
         <div class="card">
             <div class="filter-container">
-                <h2 style="font-size: 1.1rem; font-weight: 600;">Histórico & Gráfico</h2>
+                <h2 style="font-size: 1.1rem; font-weight: 600;">Histórico de Gastos</h2>
+                <!-- O select some no PDF, substituído pelo texto -->
                 <select id="monthFilter" onchange="updateUI()">
                     <option value="ALL">Todos os Meses</option>
                 </select>
             </div>
 
-            <!-- Gráfico Visível na Tela -->
+            <!-- Gráfico de Pizza (Visível na Tela) -->
             <div class="chart-container" id="chart-view">
                 <canvas id="expenseChart"></canvas>
             </div>
 
-            <!-- Gráfico Visível apenas no PDF -->
-            <div class="bars-container" id="bars-view">
-                <!-- Injetado via JS -->
+            <!-- Resumo em Texto (Visível apenas no PDF) -->
+            <div id="text-summary-view">
+                <h3 style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 8px;">Resumo por Categoria</h3>
+                <ul class="text-summary-list" id="text-summary-list">
+                    <!-- Injetado via JS -->
+                </ul>
             </div>
             
             <h3 style="font-size: 0.95rem; color: var(--text-secondary); margin-top: 20px; margin-bottom: 8px;">Lançamentos no Período</h3>
@@ -198,7 +201,7 @@
     let expenses = JSON.parse(localStorage.getItem('financeBotExpenses')) || [];
     let myChart = null;
     
-    // Mapeamento fixo de cores por categoria
+    // Mapeamento fixo de cores para o gráfico de pizza
     const categoryColors = {
         'Contas Fixas': '#38bdf8',
         'Cartão de Crédito': '#f43f5e',
@@ -295,14 +298,14 @@
         }
     }
 
-    // Atualizar Interface e Gráficos (Pizza e Barras)
+    // Atualizar Interface
     function updateUI() {
         const list = document.getElementById('t-list');
-        const barsView = document.getElementById('bars-view');
+        const textSummaryList = document.getElementById('text-summary-list');
         const selectedPeriod = document.getElementById('monthFilter').value;
         
         list.innerHTML = '';
-        barsView.innerHTML = '';
+        textSummaryList.innerHTML = '';
 
         let total = 0;
         let catTotals = {};
@@ -314,7 +317,7 @@
 
         if (filteredExpenses.length === 0) {
             list.innerHTML = '<li style="color: var(--text-secondary); font-size: 0.85rem; text-align: center; padding: 20px 0;">Nenhum gasto registrado neste período.</li>';
-            barsView.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; text-align: center; padding: 10px 0;">Sem dados para exibir.</div>';
+            textSummaryList.innerHTML = '<li style="color: var(--text-secondary); font-size: 0.85rem;">Sem dados.</li>';
         } else {
             filteredExpenses.forEach(e => {
                 total += e.val;
@@ -334,22 +337,16 @@
                 `;
             });
 
-            // Preencher as barras HTML/CSS para o PDF
+            // Preencher resumo em texto simples para o PDF
             Object.keys(catTotals).forEach(cat => {
                 const catVal = catTotals[cat];
                 const percentage = total > 0 ? ((catVal / total) * 100).toFixed(1) : 0;
-                const barColor = categoryColors[cat] || '#38bdf8';
 
-                barsView.innerHTML += `
-                    <div class="bar-item">
-                        <div class="bar-header">
-                            <span class="bar-name">${cat}</span>
-                            <span class="bar-val">R$ ${catVal.toFixed(2).replace('.', ',')} (${percentage}%)</span>
-                        </div>
-                        <div class="bar-track">
-                            <div class="bar-fill" style="width: ${percentage}%; background-color: ${barColor};"></div>
-                        </div>
-                    </div>
+                textSummaryList.innerHTML += `
+                    <li class="text-summary-item">
+                        <span>${cat}</span>
+                        <span>R$ ${catVal.toFixed(2).replace('.', ',')} (${percentage}%)</span>
+                    </li>
                 `;
             });
         }
@@ -367,35 +364,51 @@
         myChart.update();
     }
 
-    // Exportar PDF
+    // Exportar PDF 100% Texto Limpo
     function generatePDF() {
         const element = document.getElementById('relatorio-pdf');
-        const selectedPeriod = document.getElementById('monthFilter').value;
+        const selectBox = document.getElementById('monthFilter');
+        const filterContainer = document.querySelector('.filter-container');
+        const selectedPeriod = selectBox.value;
         const periodText = selectedPeriod === 'ALL' ? 'Geral' : selectedPeriod.replace('/', '_');
 
-        // Seleciona os elementos para alternância
         const chartView = document.getElementById('chart-view');
-        const barsView = document.getElementById('bars-view');
+        const textSummaryView = document.getElementById('text-summary-view');
         const deleteButtons = document.querySelectorAll('.btn-delete');
 
-        // Prepara para o PDF: esconde Pizza, mostra Barras, esconde "X"
+        // Cria texto simples para substituir a caixa de seleção <select> no PDF
+        const filterText = document.createElement('span');
+        filterText.id = 'pdf-filter-text';
+        filterText.style.color = 'var(--text-secondary)';
+        filterText.style.fontSize = '0.9rem';
+        filterText.innerText = selectBox.options[selectBox.selectedIndex].text;
+        
+        selectBox.style.display = 'none'; // Esconde a caixa seletora
+        filterContainer.appendChild(filterText); // Adiciona texto limpo
+
+        // Esconde Gráfico e botões, mostra apenas texto puro
         chartView.style.display = 'none';
-        barsView.style.display = 'block';
+        textSummaryView.style.display = 'block';
         deleteButtons.forEach(btn => btn.style.display = 'none');
 
+        // Configurações do PDF para evitar cortes
         const opt = {
-            margin:       10,
+            margin:       [10, 10, 15, 10], // Margem superior, direita, inferior, esquerda
             filename:     `Relatorio_Financeiro_${periodText}.pdf`,
             image:        { type: 'jpeg', quality: 0.98 },
             html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#0f1115' },
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] } // Evita cortes horizontais e verticais na tabela
         };
 
         html2pdf().set(opt).from(element).save().then(() => {
-            // Restaura exibição original após salvar o PDF
+            // Restaura tudo de volta ao estado normal da tela
             chartView.style.display = 'block';
-            barsView.style.display = 'none';
+            textSummaryView.style.display = 'none';
             deleteButtons.forEach(btn => btn.style.display = 'block');
+            
+            filterText.remove();
+            selectBox.style.display = 'block';
         });
     }
 
